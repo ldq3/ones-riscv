@@ -1,0 +1,35 @@
+#! /usr/bin/env zsh
+# mise description="debug kernel"
+cargo build --release
+
+tmux ls | grep -q "kernel"
+if [ $? -ne 0 ]; then
+    echo "create session 'kernel'"
+    tmux new -d -s kernel -n qemu
+    tmux new-window -tkernel -n gdb
+else
+    echo "session 'kernel' has existed, exit"
+    exit
+fi
+
+FS_IMG="../../../lib/data/fs.img"
+
+QEMU_CMD="qemu-system-riscv64 \
+-machine virt \
+-nographic \
+-bios ../bootloader/rustsbi-qemu.bin \
+-device loader,file=target/riscv64gc-unknown-none-elf/release/kernel,addr=0x80200000 \
+-drive file=${FS_IMG},if=none,format=raw,id=x0 \
+-device virtio-blk-device,drive=x0 \
+-s -S"
+
+GDB_CMD="riscv64-unknown-elf-gdb \
+-ex 'file target/riscv64gc-unknown-none-elf/release/kernel' \
+-ex 'set arch riscv:rv64' \
+-ex 'target remote localhost:1234' "
+
+tmux send-keys -tkernel:qemu "${QEMU_CMD}" C-m
+
+tmux send-keys -tkernel:gdb "${GDB_CMD}" C-m
+
+tmux attach-session -tkernel:gdb

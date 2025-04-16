@@ -1,0 +1,29 @@
+#! /usr/bin/env zsh
+# mise description="start kernel"
+
+FS_IMG="../../../lib/data/fs.img"
+
+cargo build --release
+
+tmux ls | grep -q "kernel"
+if [ $? -ne 0 ]; then
+    echo "create session 'kernel'"
+    tmux new -d -s kernel -n qemu
+else
+    echo "session 'kernel' has existed, exit"
+    exit
+fi
+
+# rust-objcopy --strip-all target/riscv64gc-unknown-none-elf/release/kernel -O binary target/riscv64gc-unknown-none-elf/release/kernel
+
+QEMU_CMD="qemu-system-riscv64 \
+-machine virt \
+-nographic \
+-bios ../bootloader/rustsbi-qemu.bin \
+-device loader,file=target/riscv64gc-unknown-none-elf/release/kernel,addr=0x80200000 \
+-drive file=${FS_IMG},if=none,format=raw,id=x0 \
+-device virtio-blk-device,drive=x0"
+
+tmux send-keys -tkernel:qemu "${QEMU_CMD}" C-m
+
+tmux attach-session -tkernel:qemu

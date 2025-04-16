@@ -1,0 +1,11 @@
+{
+	"recommendations": [
+		"1yib.rust-bundle",
+		"tamasfe.even-better-toml",
+		"jscearcy.rust-doc-viewer",
+		"swellaby.vscode-rust-test-adapter",
+		"lorenzopirro.rust-flash-snippets",
+		"conradludgate.rust-playground",
+		"zhwu95.riscv"
+	]
+}
