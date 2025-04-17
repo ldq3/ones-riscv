@@ -36,7 +36,7 @@ scratch 寄存器的作用
 mod system_call;
 pub mod context;
 
-use alloc::{format, vec};
+use alloc::{ format, vec };
 use riscv::{ addr::BitField, register::{ self, sscratch, stval } };
 use ones::{
     concurrency::scheduler::Main, intervene::{ Cause, Dependence, Lib },
@@ -94,7 +94,7 @@ impl Dependence<UserContext> for Handler {
     #[inline]
     fn syscall(id: usize, args: [usize; 3]) -> isize {
         use crate::intervene::system_call::Handler;
-        use ones::intervene::system_call::Lib;
+        use ones::system_call::Lib;
         Handler::syscall(id, args)
     }
     
@@ -155,7 +155,10 @@ impl Lib<UserContext> for Handler {
             unsafe{ &mut *(address as *mut UserContext) }
         });
 
-        Self::dist_user(user_context);
+        let cause = Self::cause();
+        let value = Self::value();
+
+        Self::dist_user(user_context, cause, value);
     }
 
     fn return_to_user() -> ! {

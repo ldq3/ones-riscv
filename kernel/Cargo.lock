@@ -79,7 +79,6 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "ones"
 version = "0.1.0"
-source = "git+https://github.com/ldq3/ones.git?rev=f74b2c5b8729eb04a567778cc8f4088ca5b1d449#f74b2c5b8729eb04a567778cc8f4088ca5b1d449"
 dependencies = [
  "bitflags",
  "lazy_static",

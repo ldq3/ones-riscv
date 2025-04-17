@@ -1,12 +1,8 @@
-use ones::intervene::system_call::{ Lib, Dependence };
+use ones::system_call::{ Lib, Dependence };
 
 pub struct Handler;
 
-impl Dependence for Handler {
-    fn current_user_token() -> usize {
-        0
-    }
-}
+impl Dependence for Handler { }
 
 impl Lib for Handler {}
 
