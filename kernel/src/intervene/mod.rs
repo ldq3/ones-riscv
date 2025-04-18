@@ -33,7 +33,7 @@ Trap::Exception(Exception::UserEnvCall) => {
 
 scratch 寄存器的作用
 */
-mod system_call;
+pub mod data;
 
 use alloc::{ format, vec };
 use riscv::{ addr::BitField, register::{ self, sscratch, stval } };
@@ -41,16 +41,13 @@ use ones::{
     concurrency::scheduler::Main, intervene::{ Cause, Dependence, Lib },
     memory::{ page::Table, Address },
     runtime::address_space::AddressSpace as _,
-    intervene::Data as D,
 };
 
-use crate::{cpu::data_registers::DataReg, runtime::address_space::AddressSpace};
+use crate::{ cpu::data_registers::DataReg, runtime::address_space::AddressSpace };
 use crate::concurrency::scheduler;
 
 use core::arch::global_asm;
 global_asm!(include_str!("handler.S"));
-
-pub type Data = D<DataReg>;
 
 pub struct Handler;
 
@@ -91,9 +88,9 @@ impl Dependence<DataReg> for Handler {
 
     #[inline]
     fn syscall(id: usize, args: [usize; 3]) -> isize {
-        use crate::intervene::system_call::Handler;
+        use crate::system_call;
         use ones::system_call::Lib;
-        Handler::syscall(id, args)
+        system_call::Handler::syscall(id, args)
     }
     
     #[inline]
@@ -141,6 +138,8 @@ impl Lib<DataReg> for Handler {
     } 
 
     fn service_user() {
+        use crate::intervene::data::Data;
+
         let (_, _, handler_kernel, _) = Self::layout();
         Self::handler_set(handler_kernel);
         let user_context = scheduler::Handler::access(|scheduler| {

@@ -44,6 +44,7 @@ mod cpu;
 mod intervene;
 mod peripheral;
 mod file_system;
+mod system_call;
 
 use cpu::satp;
 use ones::{ file_system::Flag, memory::Address };
