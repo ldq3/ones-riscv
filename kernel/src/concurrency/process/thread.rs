@@ -1,10 +1,10 @@
-use ones::{ intervene::context::KernelContext, concurrency::process::thread::{ ModelThread, Thread as T } };
+use ones::{ concurrency::process::thread::context::Context, concurrency::process::thread::{ ModelThread, Thread as T } };
 
 pub struct Thread(pub ModelThread);
 
 impl T for Thread {
     fn new(pid: usize, tid: usize, sp: usize, ra: usize) -> Self {
-        let kernel_context = KernelContext::new(sp, ra);
+        let kernel_context = Context::new(sp, ra);
         
         let inner = ModelThread {
             pid,
@@ -16,7 +16,7 @@ impl T for Thread {
     }
 
     fn empty() -> Self { 
-        let kernel_context = KernelContext::empty();
+        let kernel_context = Context::empty();
 
         let inner = ModelThread {
             pid: 0,

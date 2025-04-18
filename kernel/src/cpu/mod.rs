@@ -16,6 +16,7 @@ satp 寄存器的组成：
 | ASID | 4-11 | 地址空间标识符（Address Space Identifier），用于区分不同的地址空间 |
 | PPN  | 12-63| 物理页号（Physical Page Number），指向顶级页表的物理地址           |
 */
+pub mod data_registers;
 pub mod timer;
 
 use ones::cpu::Lib;

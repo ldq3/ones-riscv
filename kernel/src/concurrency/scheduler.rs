@@ -20,9 +20,9 @@ use core::arch::global_asm;
 
 global_asm!(include_str!("switch.S"));
 
-use ones::intervene::context::KernelContext;
+use ones::concurrency::process::thread::context::Context;
 extern "C" {
-    fn switch(current: *mut KernelContext, next: *const KernelContext);
+    fn switch(current: *mut Context, next: *const Context);
 }
 
 impl Main<Process> for Handler {

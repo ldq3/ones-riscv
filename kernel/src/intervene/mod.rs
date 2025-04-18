@@ -34,7 +34,6 @@ Trap::Exception(Exception::UserEnvCall) => {
 scratch 寄存器的作用
 */
 mod system_call;
-pub mod context;
 
 use alloc::{ format, vec };
 use riscv::{ addr::BitField, register::{ self, sscratch, stval } };
@@ -45,18 +44,17 @@ use ones::{
     intervene::Data as D,
 };
 
-use crate::runtime::address_space::AddressSpace;
+use crate::{cpu::data_registers::DataReg, runtime::address_space::AddressSpace};
 use crate::concurrency::scheduler;
-use context::UserContext;
 
 use core::arch::global_asm;
 global_asm!(include_str!("handler.S"));
 
-pub type Data = D<UserContext>;
+pub type Data = D<DataReg>;
 
 pub struct Handler;
 
-impl Dependence<UserContext> for Handler {
+impl Dependence<DataReg> for Handler {
     fn cause() -> Cause {
         use register::scause;
         use Cause::*;
@@ -127,7 +125,7 @@ impl Dependence<UserContext> for Handler {
     }
 }
 
-impl Lib<UserContext> for Handler {
+impl Lib<DataReg> for Handler {
     fn init() {
         use register::sstatus; // sie
         
@@ -140,7 +138,6 @@ impl Lib<UserContext> for Handler {
 
             // sie::set_stimer(); // enable timer interrupt
         }
-         
     } 
 
     fn service_user() {
@@ -152,7 +149,7 @@ impl Lib<UserContext> for Handler {
             let (frame_number, _) = scheduler.process[pid].0.address_space.0.page_table.get(page_number);
             let address = Address::address(frame_number);
 
-            unsafe{ &mut *(address as *mut UserContext) }
+            unsafe{ &mut *(address as *mut Data) }
         });
 
         let cause = Self::cause();

@@ -2,10 +2,10 @@ pub mod thread;
 
 use alloc::vec::Vec;
 use ones::{
-    concurrency::{process::{ thread::Thread as _, Dependence, ModelProcess, Process as P }, scheduler::Main}, memory::{ page::Table, Flag}, runtime::address_space::AddressSpace as _, Allocator
+    concurrency::{process::{ thread::Thread as _, Dependence, ModelProcess, Process as P }, scheduler::Main}, cpu::DataReg as _, memory::{ page::Table, Flag}, runtime::address_space::AddressSpace as _, Allocator
 };
 
-use crate::runtime::address_space::AddressSpace;
+use crate::{cpu::data_registers::DataReg, runtime::address_space::AddressSpace};
 use thread::Thread;
 
 pub struct Process(pub ModelProcess<Thread, AddressSpace>);
@@ -34,7 +34,7 @@ impl P for Process {
         let mut vector = Vec::new();
         {
             use ones::concurrency::process::thread::Thread;
-            use ones::intervene::context::UserContext;
+            //use ones::intervene::context::UserContext;
 
             let tid = 0;
 
@@ -48,8 +48,17 @@ impl P for Process {
                 cpu::satp,
                 intervene::{ self, Data }
             };
+
+            use riscv::register::sstatus::{ self, SPP };
             let data = Data::get_mut(frame_number);
-            data.user_context.init(address_space.0.entry, usp);
+            data.data_reg = DataReg::empty();
+            data.data_reg.sp_set(usp);
+            let mut sstatus = sstatus::read();
+            sstatus.set_spp(SPP::User);
+
+            data.status = sstatus.bits();
+            data.pc = address_space.0.entry;
+
             use crate::concurrency::scheduler;
             let frame_num = scheduler::Handler::access(|scheduler| {
                 let process = &mut scheduler.process[0];
