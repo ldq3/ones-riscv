@@ -47,13 +47,13 @@ mod file_system;
 mod system_call;
 
 use cpu::satp;
-use ones::{ file_system::Flag, memory::Address };
+use ones::{ concurrency::scheduler::inner::Scheduler, file_system::Flag, memory::Address };
 use runtime::heap::Main as _;
 
 #[no_mangle]
 pub fn kernel_main() -> ! {
     use ones::{
-        concurrency::scheduler::Main as _,
+        concurrency::scheduler::Mod as _,
         cpu::Lib as _ ,
     };
 
@@ -83,7 +83,7 @@ pub fn kernel_main() -> ! {
         scheduler::Handler::init(); 
 
         let kernel_satp = scheduler::Handler::access(|scheduler| {
-            let process = &mut scheduler.process[0];
+            let process = &mut scheduler.0.process[0];
             let frame_number = process.0.address_space.0.page_table.root();
 
             satp(frame_number)
@@ -122,8 +122,10 @@ pub fn kernel_main() -> ! {
         if let Some(mut file) = file {
             let elf_data = file.read_all();
             use concurrency::scheduler;
-            scheduler::Handler::new_process(&elf_data);
-            scheduler::Handler::switch_to_ready();
+            scheduler::Handler::access(|scheduler| {
+                scheduler.0.new_process(&elf_data);
+                scheduler.switch_to_ready();
+            });
         } else { panic!("Error when opening the init_process."); }
     }
 

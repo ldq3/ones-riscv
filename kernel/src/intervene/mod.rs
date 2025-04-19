@@ -38,7 +38,7 @@ pub mod data;
 use alloc::{ format, vec };
 use riscv::{ addr::BitField, register::{ self, sscratch, stval } };
 use ones::{
-    concurrency::scheduler::Main, intervene::{ Cause, Dependence, Lib },
+    concurrency::scheduler::Mod as _, intervene::{ Cause, Dependence, Lib },
     memory::{ page::Table, Address },
     runtime::address_space::AddressSpace as _,
 };
@@ -143,9 +143,9 @@ impl Lib<DataReg> for Handler {
         let (_, _, handler_kernel, _) = Self::layout();
         Self::handler_set(handler_kernel);
         let user_context = scheduler::Handler::access(|scheduler| {
-            let (pid, tid) = scheduler.running;
+            let (pid, tid) = scheduler.0.running;
             let (page_number, _) = AddressSpace::intervene_data(tid);
-            let (frame_number, _) = scheduler.process[pid].0.address_space.0.page_table.get(page_number);
+            let (frame_number, _) = scheduler.0.process[pid].0.address_space.0.page_table.get(page_number);
             let address = Address::address(frame_number);
 
             unsafe{ &mut *(address as *mut Data) }
@@ -165,9 +165,9 @@ impl Lib<DataReg> for Handler {
         let (handler_user, load_user_context, _, _) = Self::layout();
         Self::handler_set(handler_user);
         let (cx_addr, satp) = scheduler::Handler::access(|scheduler| {
-            let (pid, tid) = scheduler.running;
+            let (pid, tid) = scheduler.0.running;
             let (page_number, _) = AddressSpace::intervene_data(tid);
-            let page_table = scheduler.process[pid].0.address_space.0.page_table.root();
+            let page_table = scheduler.0.process[pid].0.address_space.0.page_table.root();
             
             (Address::address(page_number), 1usize << 63 | page_table)
         });

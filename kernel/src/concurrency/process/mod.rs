@@ -2,8 +2,9 @@ pub mod thread;
 
 use alloc::vec::Vec;
 use ones::{
-    concurrency::{process::{ thread::Thread as _, Dependence, ModelProcess, Process as P }, scheduler::Main}, cpu::DataReg as _, memory::{ page::Table, Flag}, runtime::address_space::AddressSpace as _, Allocator
+    concurrency::{ process::{ thread::Thread as _, Dependence, ModelProcess, Process as P }, scheduler::Mod }, cpu::DataReg as _, memory::{ page::Table, Flag}, runtime::address_space::AddressSpace as _, Allocator
 };
+use ones::concurrency::process::thread::context::Context;
 
 use crate::{cpu::data_registers::DataReg, runtime::address_space::AddressSpace};
 use thread::Thread;
@@ -14,7 +15,7 @@ impl Dependence for Process {
     fn kernel_map_area(range: (usize, usize), flag: Flag) {
         use crate::concurrency::scheduler;
         scheduler::Handler::access(|scheduler| {
-            let kernel = &mut scheduler.process[0];
+            let kernel = &mut scheduler.0.process[0];
             kernel.0.address_space.0.page_table.map_area(range, flag);
         })
     }
@@ -57,7 +58,7 @@ impl P for Process {
 
             use crate::concurrency::scheduler;
             let frame_num = scheduler::Handler::access(|scheduler| {
-                let process = &mut scheduler.process[0];
+                let process = &mut scheduler.0.process[0];
 
                 process.0.address_space.0.page_table.root()
             });
@@ -81,6 +82,11 @@ impl P for Process {
         };
 
         Self(inner)
+    }
+
+    #[inline]
+    fn id(&self) -> usize {
+        self.0.id
     }
 
     fn new_kernel() -> Self {
@@ -117,5 +123,15 @@ impl P for Process {
         };
 
         Self(inner)
+    }
+
+    #[inline]
+    fn get_context_mut(&mut self, tid: usize) -> &mut Context {
+        &mut self.0.thread[tid].0.kernel_context
+    }
+
+    #[inline]
+    fn get_context_ref(&self, tid: usize) -> &Context {
+        &self.0.thread[tid].0.kernel_context
     }
 }
