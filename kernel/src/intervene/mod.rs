@@ -76,6 +76,8 @@ impl Dependence<DataReg> for Handler {
 
         log(vec![
             format!("Cuase: {:?}", cause),
+            format!("Class: {}", class),
+            format!("Number: {}", number),
         ]);
 
         cause

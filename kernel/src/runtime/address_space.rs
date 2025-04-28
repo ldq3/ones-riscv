@@ -1,7 +1,6 @@
 use alloc::{ format, vec };
 use ones::{ 
-    memory::{ page::{ frame::Frame, Dependence, Table as _ }, Address, Flag },
-    runtime::address_space::{ config::INTERVENE_TEXT, AddressSpace as A, ModelAddressSpace },
+    intervene::data::Data, memory::{ page::{ frame::Frame, Dependence, Table as _ }, Address, Flag }, runtime::address_space::{ config::INTERVENE_TEXT, AddressSpace as A, ModelAddressSpace }
 };
 use crate::memory::page;
 
@@ -9,6 +8,9 @@ pub struct AddressSpace(pub ModelAddressSpace<page::Table>);
 
 impl A for AddressSpace {
     fn from_elf(elf: &[u8]) -> Self {
+        use ones::cpu::DataReg as _;
+        use crate::cpu::data_registers::DataReg;
+
         extern "C" {
             fn ttext();
         }
@@ -17,8 +19,16 @@ impl A for AddressSpace {
         let itext = Address::number(ttext as usize);
 
         let inner = ModelAddressSpace::from_elf(elf, itext);
+        let mut address_space = Self(inner);
+        let frame_number = address_space.new_intervene(0);
+        let usp = address_space.new_stack(0);
 
-        Self(inner)
+        let data = Data::get_mut(frame_number);
+        data.data_reg = DataReg::empty();
+        data.data_reg.sp_set(usp);
+        data.pc = address_space.0.entry;
+
+        address_space
     }
 
     fn clone(&self) -> Self {
@@ -102,7 +112,7 @@ impl A for AddressSpace {
                 }
                 page_table.frame(frame);
             }
-        }
+        } 
 
         let frame_nubmer = Address::number(ttext as usize);
         unsafe{ page_table.fixed_map(INTERVENE_TEXT, frame_nubmer, Flag::X | Flag::R) };

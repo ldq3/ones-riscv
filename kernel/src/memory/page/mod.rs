@@ -92,7 +92,7 @@ impl T for Table {
             root,
             frame: Vec::new()
         };
-
+        
         Self(inner)
     }
 

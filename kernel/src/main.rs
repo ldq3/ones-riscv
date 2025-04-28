@@ -122,10 +122,11 @@ pub fn kernel_main() -> ! {
         if let Some(mut file) = file {
             let elf_data = file.read_all();
             use concurrency::scheduler;
-            scheduler::Handler::access(|scheduler| {
-                scheduler.0.new_process(&elf_data);
-                scheduler.switch_to_ready();
+            let (idle, next) = scheduler::Handler::access(|scheduler| {
+                scheduler.new_process(&elf_data); 
+                scheduler.0.switch_to_ready()
             });
+            scheduler::Handler::switch(idle, next);
         } else { panic!("Error when opening the init_process."); }
     }
 

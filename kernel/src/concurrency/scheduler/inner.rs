@@ -1,54 +1,60 @@
-use alloc::{ vec::Vec, collections::VecDeque };
-use ones::concurrency::{ 
-    scheduler::inner::{ Scheduler as S, Dependence, ModelScheduler},
-    process::Process as _,
+use ones::{
+    concurrency::scheduler::inner::{ ModelScheduler, Scheduler as S },
+    memory::{ page::Table, Flag }
 };
-use crate::concurrency::process::Process;
+use crate::{
+    concurrency::process::Process,
+    runtime::address_space::AddressSpace
+};
 
 pub struct Scheduler(pub ModelScheduler<Process>);
-
-use core::arch::global_asm;
-global_asm!(include_str!("switch.S"));
-
-extern "C" {
-    fn switch(current: usize, next: usize);
-}
-
-impl Dependence for Scheduler {
-    #[inline]
-    fn switch(current: usize, next: usize) {
-        unsafe {
-            switch(current, next);
-        }
-    }
-}
 
 impl S for Scheduler {
     #[inline]
     fn new() -> Self {
-        let mut process = Vec::new();
-        process.push(Process::new_kernel());
-
-        let inner = ModelScheduler {
-            process,
-            ready: VecDeque::new(),
-            running: (0, 0)
-        };
+        let inner = ModelScheduler::new();
 
         Self(inner)
     }
 
-    #[inline]
-    fn switch_to_idle(&mut self) {
-        let (current, next) = self.0.switch_to_idle();
+    fn new_process(&mut self, elf: &[u8]) {
+        use ones::{
+            memory::Address,
+            concurrency::process::Process as _,
+            runtime::address_space::AddressSpace as _,
+            intervene::Lib
+        };
+        use crate::{ 
+            cpu::satp,
+            intervene::{ self },
+        };
 
-        Self::switch(current, next);
-    }
+        let (ks_bound, ks_bottom) = self.0.alloc_kernel_stack();
+        let kernel = &mut self.0.process[0];
 
-    #[inline]
-    fn switch_to_ready(&mut self) {
-        let (current, next) = self.0.switch_to_ready();
+        let mut process = Process::new(elf);
 
-        Self::switch(current, next);
+        kernel.0.address_space.0.page_table.map_area((ks_bound, ks_bottom), Flag::R | Flag::W);
+        let ksp = Address::address(ks_bottom + 1) - 1;
+        process.0.thread[0].0.context.sp = ksp;
+
+        use crate::intervene::data::Data;
+        use riscv::register::sstatus::{ self, SPP };
+
+        let (page_number, _) = AddressSpace::intervene_data(0);
+        let (frame_number, _) = process.0.address_space.0.page_table.get(page_number);
+        let data = Data::get_mut(frame_number);
+
+        let mut sstatus = sstatus::read();
+        sstatus.set_spp(SPP::User);
+        data.status = sstatus.bits();
+        
+        data.kernel_info.addr_trans = satp(kernel.0.address_space.0.page_table.root());
+        data.kernel_info.dist = intervene::Handler::service_user as usize;
+        data.kernel_info.sp = ksp;
+
+        let pid = process.id();
+        self.0.process.insert(pid, process);
+        self.0.ready.push_back((pid, 0));
     }
 }
