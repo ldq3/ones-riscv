@@ -47,15 +47,12 @@ mod file_system;
 mod system_call;
 
 use cpu::satp;
-use ones::{ concurrency::scheduler::inner::Scheduler, file_system::Flag, memory::Address };
+use ones::{ intervene::Lib, memory::Address };
 use runtime::heap::Main as _;
 
 #[no_mangle]
 pub fn kernel_main() -> ! {
-    use ones::{
-        concurrency::scheduler::Mod as _,
-        cpu::Lib as _ ,
-    };
+    use ones::cpu::Lib as _;
 
     { // Initialize the runtime.
         use ones::memory::clear;
@@ -78,13 +75,14 @@ pub fn kernel_main() -> ! {
         let tail = Address::number(config::END);
         Frame::init(head, tail);
 
-        use crate::concurrency::scheduler;
-        use ones::memory::page::Table;
-        scheduler::Handler::init(); 
+        // scheduler::Handler::init();
+        use ones::concurrency::process::{ self, Lib as _ };
+        use crate::concurrency::process::Lib as PLib;
 
-        let kernel_satp = scheduler::Handler::access(|scheduler| {
-            let process = &mut scheduler.0.process[0];
-            let frame_number = process.0.address_space.0.page_table.root();
+        PLib::new_kernel();
+        let kernel_satp = process::access(|manager| { 
+            let process = manager.process[0].as_mut().unwrap();
+            let frame_number = process.page_table.root.number;
 
             satp(frame_number)
         });
@@ -94,7 +92,7 @@ pub fn kernel_main() -> ! {
 
     { // Initialize the intervene system.
         use ones::intervene::Lib as _;
-        intervene::Handler::init();
+        intervene::Lib::init();
 
         use ones::peripheral::plic;
         use crate::peripheral::config::{ HART_M, HART_S, INTERRUPT };
@@ -118,16 +116,31 @@ pub fn kernel_main() -> ! {
     }
     
     { // User program.
-        let file = file_system::Handler::open_file("init", Flag::R_W);
-        if let Some(mut file) = file {
-            let elf_data = file.read_all();
-            use concurrency::scheduler;
-            let (idle, next) = scheduler::Handler::access(|scheduler| {
-                scheduler.new_process(&elf_data); 
-                scheduler.0.switch_to_ready()
-            });
-            scheduler::Handler::switch(idle, next);
-        } else { panic!("Error when opening the init_process."); }
+        use crate::concurrency::{ 
+            process::Lib as PLib,
+            thread::Lib as TLib,
+            coroutine::Lib as CLib,
+        };
+        use ones::concurrency::{ 
+            process::Lib as _,
+            thread::{ self, Lib as _ },
+            coroutine::{ Lib as _, Coroutine, context::Context },
+        };
+        let pid = PLib::init();
+        TLib::new(pid);
+
+        let cx = thread::access(|scheduler|{
+            let tid = scheduler.id.switch_s();
+
+            let thread = scheduler.thread[tid].as_mut().unwrap();
+            let sp = thread.idata().ki.sp;
+
+            use crate::intervene;
+            Context::new(intervene::Lib::return_to_user as usize, sp)
+        });
+
+        let _cid = Coroutine::new(cx);
+        CLib::switch_to_ready();
     }
 
     panic!("Shutdown machine!");

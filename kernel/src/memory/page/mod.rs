@@ -21,13 +21,15 @@ pub mod entry;
 use core::slice::from_raw_parts_mut;
 
 use alloc::vec::Vec;
-pub use ones::memory::page::Map;
-use ones::memory::{ page::{ entry::Entry as _, frame::Frame, Dependence, ModelTable, Table as T }, Flag };
-use entry::TableEntry;
+use ones::memory::{
+    page::{ entry::{ Lib as _, Entry }, frame::Frame, Dependence, Lib as L, Table },
+    Flag,
+};
+use entry::EntryLib;
 
-pub struct Table(ModelTable);
+pub struct Lib;
 
-impl Dependence for Table {
+impl Dependence for Lib {
     fn index(page_num: usize) -> Vec<usize> {
         let mut page_num = page_num;
         let mut index = [0usize; 3];
@@ -46,57 +48,127 @@ impl Dependence for Table {
         3
     }
 
-    #[inline]
-    fn new_entry(frame_number: usize, flag: Flag) -> usize {
-        TableEntry::new(frame_number, flag).bits()
-    }
+    fn get_mut(table: &mut Table, page_num: usize) -> &mut Entry {
+        let index = Self::index(page_num);
+        let table = Self::as_table(table.root.number);
 
-    #[inline]
-    fn flag(entry: usize) -> Flag {
-        let entry = TableEntry::from_bits(entry);
-        entry.flag()
-    }
+        let mut current_entry = &mut table[index[0]];
+        let frame_number = EntryLib::frame_number(current_entry);
+        let mut current_table = Self::as_table(frame_number);
 
-    #[inline]
-    fn frame_number(entry: usize) -> usize {
-        let entry = TableEntry::from_bits(entry);
-        entry.frame_number()
-    }
+        for i in 1..(Self::conf() - 1) {
+            current_entry = &mut current_table[index[i]];
+            let frame_number= EntryLib::frame_number(current_entry);
+            current_table = Self::as_table(frame_number);
+        }
 
-    #[inline]
-    fn set_flag(entry: &mut usize, flag: Flag) {
-        let mut wrapper = TableEntry::from_bits(*entry);
-        wrapper.set_flag(flag);
-        *entry = wrapper.bits();
-    }
+        current_entry = &mut current_table[index[Self::conf() - 1]];
 
-    #[inline]
-    fn root_table(&mut self) -> &'static mut [usize] {
-        use ones::memory::Address;
-
-        let address = Address::address(self.0.root.number);
-        unsafe { from_raw_parts_mut(address as *mut usize, 512) }
-    }
-
-    #[inline]
-    fn frame(&mut self, frame: ones::memory::page::frame::Frame) {
-        self.0.frame.push(frame);
+        current_entry
     }
 }
 
-impl T for Table {
-    fn new() -> Self {
-        let root = Frame::new();
+impl L for Lib {
+    fn map(table: &mut Table, page_num: usize, page_flag: Flag) {
+        let index = Self::index(page_num);
+        let root = Self::as_table(table.root.number);
 
-        let inner = ModelTable {
-            root,
-            frame: Vec::new()
+        let mut current_entry = &mut root[index[0]];
+        let mut current_table = if !EntryLib::flag(current_entry).is_valid() {
+            let frame = Frame::new();
+            let frame_number = frame.number;
+            *current_entry = EntryLib::new(frame_number, Flag::V);
+            table.frame.push(frame);
+
+            Self::as_table(frame_number)
+        } else {
+            let frame_number = EntryLib::frame_number(current_entry);
+            Self::as_table(frame_number)
         };
-        
-        Self(inner)
+
+        for i in 1..(Self::conf() - 1) {
+            current_entry = &mut current_table[index[i]];
+            current_table = if !EntryLib::flag(current_entry).is_valid() {
+                let frame = Frame::new();
+                let frame_number = frame.number;
+                *current_entry = EntryLib::new(frame_number, Flag::V);
+                table.frame.push(frame);
+
+                Self::as_table(frame_number)
+            } else {
+                let frame_number = EntryLib::frame_number(current_entry);
+                Self::as_table(frame_number)
+            }
+        }
+
+        current_entry = &mut current_table[index[Self::conf() - 1]];
+        if !EntryLib::flag(current_entry).is_valid() {
+            let frame = Frame::new();
+            *current_entry = EntryLib::new(frame.number, Flag::V | page_flag);
+            table.frame.push(frame);
+        }
     }
 
-    fn copy_data(&mut self, range: (usize, usize), data: &[u8]) {
+    fn unmap(table: &mut Table, page_num: usize) {
+        let entry = Self::get_mut(table, page_num);
+
+        EntryLib::flag_set(entry, Flag::empty());
+    }
+
+    fn fixed_map(table: &mut Table, page_num: usize, frame_num: usize, page_flag: Flag) {
+        let index = Self::index(page_num);
+        let root = Self::as_table(table.root.number);
+
+        let mut current_entry = &mut root[index[0]];
+        let mut current_table = if !EntryLib::flag(current_entry).is_valid() {
+            let frame = Frame::new();
+            let frame_number = frame.number;
+            *current_entry = EntryLib::new(frame_number, Flag::V);
+            table.frame.push(frame);
+            Self::as_table(frame_number)
+        } else { 
+            let frame_number = EntryLib::frame_number(current_entry);
+            Self::as_table(frame_number)
+        };
+
+        for i in 1..(Self::conf() - 1) {
+            current_entry = &mut current_table[index[i]]; 
+            current_table = if !EntryLib::flag(current_entry).is_valid() {
+                let frame = Frame::new();
+                let frame_number = frame.number;
+                *current_entry = EntryLib::new(frame_number, Flag::V);
+                table.frame.push(frame);
+
+                Self::as_table(frame_number)
+            } else {
+                let frame_number = EntryLib::frame_number(current_entry);
+
+                Self::as_table(frame_number)
+            }
+        }
+
+        current_entry = &mut current_table[index[Self::conf() - 1]];
+        *current_entry = EntryLib::new(frame_num, page_flag | Flag::V);
+    }
+    
+    fn get(table: &mut Table, page_num: usize) -> (usize, Flag) {
+        let index = Self::index(page_num); let root = Self::as_table(table.root.number);
+
+        let mut current_entry = &mut root[index[0]];
+        let frame_number = EntryLib::frame_number(current_entry);
+        let mut current_table = Self::as_table(frame_number);
+
+        for i in 1..(Self::conf() - 1) {
+            current_entry = &mut current_table[index[i]];
+            let frame_number = EntryLib::frame_number(current_entry);
+            current_table = Self::as_table(frame_number);
+        }
+
+        current_entry = &mut current_table[index[Self::conf() - 1]];
+        (EntryLib::frame_number(current_entry), EntryLib::flag(current_entry))
+    }
+
+    fn copy_data(table: &mut Table, range: (usize, usize), data: &[u8]) {
         use ones::memory::Address;
         let page_size = Address::address(1);
 
@@ -105,7 +177,7 @@ impl T for Table {
         let len = data.len();
         loop {
             let src = &data[start..len.min(start + page_size)];
-            let (frame_number, _) = self.get(current);
+            let (frame_number, _) = Self::get(table, current);
             let address = Address::address(frame_number);
             let target = unsafe{ from_raw_parts_mut(address as *mut u8, src.len()) };
             target.copy_from_slice(src);

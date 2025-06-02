@@ -10,9 +10,9 @@
 .globl switch
 
 switch:
-    sd sp, 8(a0) # save kernel stack of current task
+    # save the relative registers of current coroutine
+    sd sp, 8(a0) 
 
-    # save ra & s0~s11 of current execution
     sd ra, 0(a0)
     .set n, 0
     .rept 12
@@ -20,7 +20,7 @@ switch:
         .set n, n + 1
     .endr
 
-    # restore ra & s0~s11 of next execution
+    # restroe the relative registers of next coroutine 
     ld ra, 0(a1)
     .set n, 0
     .rept 12
@@ -28,6 +28,6 @@ switch:
         .set n, n + 1
     .endr
     
-    ld sp, 8(a1) # restore kernel stack of next task
+    ld sp, 8(a1) 
     
     ret

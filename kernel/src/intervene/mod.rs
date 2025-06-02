@@ -33,25 +33,22 @@ Trap::Exception(Exception::UserEnvCall) => {
 
 scratch 寄存器的作用
 */
-pub mod data;
 
 use alloc::{ format, vec };
 use riscv::{ addr::BitField, register::{ self, sscratch, stval } };
 use ones::{
-    concurrency::scheduler::Mod as _, intervene::{ Cause, Dependence, Lib },
-    memory::{ page::Table, Address },
-    runtime::address_space::AddressSpace as _,
+    concurrency::{process, thread},
+    intervene::{ data::Data, Cause, Dependence, Lib as L },
+    memory::Address,
+    runtime::address_space::AddressSpace
 };
-
-use crate::{ cpu::data_registers::DataReg, runtime::address_space::AddressSpace };
-use crate::concurrency::scheduler;
 
 use core::arch::global_asm;
 global_asm!(include_str!("handler.S"));
 
-pub struct Handler;
+pub struct Lib;
 
-impl Dependence<DataReg> for Handler {
+impl Dependence for Lib {
     fn cause() -> Cause {
         use register::scause;
         use Cause::*;
@@ -94,7 +91,15 @@ impl Dependence<DataReg> for Handler {
         use ones::system_call::Lib;
         system_call::Handler::syscall(id, args)
     }
+
+    fn breakpoiont(idata: &mut Data) {
+        idata.cx.pc +=2;
+    }
     
+    fn envcall() {
+        todo!()
+    }
+
     #[inline]
     fn service_set(address: usize) {
         sscratch::write(address as usize);
@@ -107,7 +112,7 @@ impl Dependence<DataReg> for Handler {
     }
 
     #[inline]
-    fn relative_layout() -> (usize, usize, usize, usize) {
+    fn layout() -> (usize, usize, usize, usize) {
         extern "C" {
             fn handler_user();
             fn load_user_context();
@@ -115,16 +120,20 @@ impl Dependence<DataReg> for Handler {
             fn load_kernel_context();
         }
 
-        (
+        let relative = (
             0,
             load_user_context as usize - handler_user as usize,
             handler_kernel as usize - handler_user as usize,
             load_kernel_context as usize - handler_user as usize,
-        )
+        );
+
+        let base = Address::address(AddressSpace::itext().range.0);
+
+        (base + relative.0, base + relative.1, base + relative.2, base + relative.3)
     }
 }
 
-impl Lib<DataReg> for Handler {
+impl L for Lib {
     fn init() {
         use register::sstatus; // sie
         
@@ -140,23 +149,16 @@ impl Lib<DataReg> for Handler {
     } 
 
     fn service_user() {
-        use crate::intervene::data::Data;
-
         let (_, _, handler_kernel, _) = Self::layout();
         Self::handler_set(handler_kernel);
-        let user_context = scheduler::Handler::access(|scheduler| {
-            let (pid, tid) = scheduler.0.running;
-            let (page_number, _) = AddressSpace::intervene_data(tid);
-            let (frame_number, _) = scheduler.0.process[pid].0.address_space.0.page_table.get(page_number);
-            let address = Address::address(frame_number);
+        thread::access(|scheduler| {
+            let tid = scheduler.id.running.unwrap();
+            let thread = scheduler.thread[tid].as_mut().unwrap();
+            let cause = Self::cause();
+            let value = Self::value();
 
-            unsafe{ &mut *(address as *mut Data) }
+            Self::dist_user(thread.idata(), cause, value);
         });
-
-        let cause = Self::cause();
-        let value = Self::value();
-
-        Self::dist_user(user_context, cause, value);
     }
 
     fn return_to_user() -> ! {
@@ -166,12 +168,19 @@ impl Lib<DataReg> for Handler {
         }
         let (handler_user, load_user_context, _, _) = Self::layout();
         Self::handler_set(handler_user);
-        let (cx_addr, satp) = scheduler::Handler::access(|scheduler| {
-            let (pid, tid) = scheduler.0.running;
-            let (page_number, _) = AddressSpace::intervene_data(tid);
-            let page_table = scheduler.0.process[pid].0.address_space.0.page_table.root();
+        let (idata_addr, pid) = thread::access(|scheduler| {
+            let tid = scheduler.id.running.unwrap();
+            let thread = scheduler.thread[tid].as_mut().unwrap();
+            let idata_addr = Address::address(AddressSpace::idata(tid).range.0);
             
-            (Address::address(page_number), 1usize << 63 | page_table)
+            (idata_addr, thread.pid)
+        });
+
+        let satp = process::access(|manager| {
+            let process = manager.process[pid].as_ref().unwrap();
+            let page_table = process.page_table.root.number;
+
+            1usize << 63 | page_table
         });
 
         unsafe {
@@ -180,7 +189,7 @@ impl Lib<DataReg> for Handler {
                 "fence.i",
                 "jr {load}",
                 load = in(reg) load_user_context,
-                in("a0") cx_addr,
+                in("a0") idata_addr,
                 in("a1") satp,
                 options(noreturn)
             )
