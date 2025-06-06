@@ -51,7 +51,7 @@ impl L for Lib {
         ]);
 
         use crate::config::MMIO;
-        let address_space = AddressSpace::new_kernel(0, MMIO, text, read_only_data, data, static_data, frame_data); // FIXME
+        let address_space = AddressSpace::new_kernel(stext as usize, MMIO, text, read_only_data, data, static_data, frame_data);
 
         let mut page_table = PageTable::new();
         for segement in &address_space.segement {

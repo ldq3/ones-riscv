@@ -1,6 +1,6 @@
     .section .text.entry
-    .globl _start
-_start:
+    .globl start
+start:
     la sp, boot_stack_bottom
     call kernel_main
 
