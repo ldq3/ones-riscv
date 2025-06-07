@@ -6,7 +6,7 @@ use ones::{
         thread::{ self, context::{ Context, Lib as _ }, Lib as L, Thread }
     },
     intervene::{ data::{ Data, KernelInfo }, Lib as _ },
-    memory::{ page::Lib as _, Address },
+    memory::{ page::Lib as _, Address, Flag },
 };
 use crate::{
     concurrency::thread::context::Lib as CLib,
@@ -29,7 +29,8 @@ impl L for Lib {
             status.set_spp(SPP::User);
             let mut cx = Context::new(status.bits(), process.address_space.entry);
 
-            PageLib::map_area(&mut process.page_table, segement[0].range, segement[0].flag);
+            PageLib::map_area(&mut process.page_table, segement[0].range, segement[0].flag | Flag::U);
+            // PageLib::map(&mut process.page_table, segement[0].range.1 + 1, Flag::R | Flag::W);
             let sp = Address::address(segement[0].range.1 + 1) - 1;
             CLib::sp_set(&mut cx, sp);
 
@@ -39,7 +40,8 @@ impl L for Lib {
             let kernel = manager.process[0].as_mut().unwrap();
 
             PageLib::map(&mut kernel.page_table, segement[2].range.0, segement[2].flag);
-            let isp = Address::address(segement[2].range.1 + 1) - 1;
+            // PageLib::map(&mut kernel.page_table, segement[2].range.0 + 1, Flag::R | Flag::W);
+            let isp = Address::address(segement[2].range.0 + 1) - 1;
 
             let addr_trans = { 
                 use crate::satp;

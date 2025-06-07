@@ -1,4 +1,5 @@
 use alloc::{ vec, format };
+use log::info;
 use ones::{
     concurrency::process::{ Lib as L, Process },
     file_system::{ Flag, Main },
@@ -59,6 +60,7 @@ impl L for Lib {
         }
         let segement = AddressSpace::itext();
         let frame_number = Address::number(ttext as usize);
+        info!("itext: {:x}", segement.range.0);
         PageLib::fixed_map(&mut page_table, segement.range.0 , frame_number, segement.flag);
 
         Process::new(None, address_space, page_table);
