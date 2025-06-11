@@ -46,49 +46,12 @@ mod peripheral;
 mod file_system;
 mod system_call;
 
-use cpu::satp;
-use ones::{ intervene::Lib, memory::Address };
-use runtime::heap::Main as _;
+use ones::intervene::Lib as _;
 
 #[no_mangle]
 pub fn kernel_main() -> ! {
-    use ones::cpu::Lib as _;
-
-    { // Initialize the runtime.
-        use ones::memory::clear;
-        extern "C" {
-            fn sbss();
-            fn ebss();
-        }
-        unsafe{ clear(sbss as usize, ebss as usize) };
-
-        use runtime::heap;
-        heap::Handler::init();
-
-        logger::init();
-
-        extern "C" {
-            fn ekernel();
-        }
-        use ones::memory::page::frame::Frame;
-        let head = Address::number(ekernel as usize);
-        let tail = Address::number(config::END);
-        Frame::init(head, tail);
-
-        // scheduler::Handler::init();
-        use ones::concurrency::process::{ self, Lib as _ };
-        use crate::concurrency::process::Lib as PLib;
-
-        PLib::new_kernel();
-        let kernel_satp = process::access(|manager| { 
-            let process = manager.process[0].as_mut().unwrap();
-            let frame_number = process.page_table.root.number;
-
-            satp(frame_number)
-        });
-
-        cpu::Handler::page_enable(kernel_satp);
-    }
+    use ones::runtime::Lib as _;
+    runtime::Lib::init();
 
     { // Initialize the intervene system.
         use ones::intervene::Lib as _;
@@ -97,7 +60,8 @@ pub fn kernel_main() -> ! {
         use ones::peripheral::plic;
         use crate::peripheral::config::{ HART_M, HART_S, INTERRUPT };
 
-        unsafe { plic::Handler::init(config::PLIC_BASE); }
+        use crate::runtime::config::PLIC_BASE;
+        unsafe { plic::Handler::init(PLIC_BASE); }
 
         plic::Handler::threshold(HART_M, 1);
         plic::Handler::threshold(HART_S, 0);
@@ -121,12 +85,21 @@ pub fn kernel_main() -> ! {
             thread::Lib as TLib,
             coroutine::Lib as CLib,
         };
-        use ones::concurrency::{ 
-            process::Lib as _,
-            thread::{ self, Lib as _ },
-            coroutine::{ Lib as _, Coroutine, context::Context },
+        use ones::{
+            file_system::Flag,
+            concurrency::{ 
+                process::Lib as _,
+                thread::{ self, Lib as _ },
+
+                coroutine::{ Lib as _, Coroutine, context::Context },
+            }
         };
-        let pid = PLib::init();
+        let res = file_system::Handler::open_file("init", Flag::R_W);
+        let pid = if let Some(mut file) = res {
+            let elf = file.read_all();
+            PLib::from_elf(None, &elf)
+        } else { panic!() };
+
         TLib::new(pid);
 
         let cx = thread::access(|scheduler|{
@@ -144,26 +117,4 @@ pub fn kernel_main() -> ! {
     }
 
     panic!("Shutdown machine!");
-}
-
-mod config {
-    // memory
-    /**
-    单位：页
-
-    元素：(head, tail)
-    */
-    pub const MMIO: &[(usize, usize)] = &[
-        (   0x100,    0x102), // VIRT_TEST/RTC in virt machine
-        ( 0x2_000,  0x2_010), // core local interrupter (CLINT)
-        ( 0xc_000,  0xc_210), // VIRT_PLIC in virt machine
-        (0x10_000, 0x10_009), // VIRT_UART0 with GPU  in virt machine
-    ];
-
-    pub const PLIC_BASE: usize =  0xc_000_000;
-    // pub const UART_BASE: usize = 0x10_000_000;
-
-    // pub const BASE:      usize = 0x80_200_000;
-    /// 单位：字节（byte）
-    pub const END :      usize = 0x88_000_000;
 }

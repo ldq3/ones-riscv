@@ -13,5 +13,5 @@ fn panic(info: &PanicInfo) -> ! {
     use ones::cpu::Lib;
     use crate::cpu;
 
-    cpu::Handler::shutdown(true)
+    cpu::Lib::shutdown(true)
 }

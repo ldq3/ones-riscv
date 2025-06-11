@@ -1,58 +1,34 @@
-use alloc::{ vec, format };
-use log::info;
 use ones::{
-    concurrency::process::{ Lib as L, Process },
-    file_system::{ Flag, Main },
+    concurrency::process::{ access, Lib as L, Process },
     memory::{ page::{ Lib as _, Table as PageTable }, Address },
     runtime::address_space::AddressSpace
 };
-use crate::{ file_system, memory::page::Lib as PageLib };
+use crate::{ memory::page::Lib as PageLib };
 
 pub struct Lib;
 
 impl L for Lib {
-    fn new_kernel() {
-        use ones::{
-            memory::Address,
-            runtime::address_space::AddressSpace,
-        };
-        use crate::config::END;
-
+    fn new(parent: Option<usize>, address_space: AddressSpace) -> usize {
         extern "C" {
-            fn stext();
-            fn etext();
-
-            fn srodata();
-            fn erodata();
-
-            fn sdata();
-            fn edata();
-
-            fn kernel_stack();
-            // sbss
-            fn ebss();
-
-            fn ekernel();
-
             fn ttext();
         }
 
-        let text = (Address::number(stext as usize), Address::number(etext as usize));
-        let read_only_data = (Address::number(srodata as usize), Address::number(erodata as usize));
-        let data = (Address::number(sdata as usize), Address::number(edata as usize));
-        let static_data = (Address::number(kernel_stack as usize), Address::number(ebss as usize));
-        let frame_data = (Address::number(ekernel as usize), Address::number(END));
+        let mut page_table = PageTable::new();
+        for segement in &address_space.segement {
+            PageLib::map_area(&mut page_table, segement.range, segement.flag);
+        }
 
-        info(vec![
-            format!("Segement text: {:x} - {:x}", text.0, text.1),
-            format!("Segement read only data: {:x} - {:x}", read_only_data.0, read_only_data.1),
-            format!("Segement data: {:x} - {:x}", data.0, data.1),
-            format!("Segement static data: {:x} - {:x}", static_data.0, static_data.1),
-            format!("Segement frame: {:x} - {:x}", frame_data.0, frame_data.1)
-        ]);
+        let segement = AddressSpace::itext();
+        let frame_number = Address::number(ttext as usize);
+        PageLib::fixed_map(&mut page_table, segement.range.0 , frame_number, segement.flag);
 
-        use crate::config::MMIO;
-        let address_space = AddressSpace::new_kernel(stext as usize, MMIO, text, read_only_data, data, static_data, frame_data);
+        Process::new(parent, address_space, page_table)
+    }
+
+    fn new_kernel(address_space: AddressSpace) -> usize {
+        extern "C" {
+            fn ttext();
+        }
 
         let mut page_table = PageTable::new();
         for segement in &address_space.segement {
@@ -60,38 +36,31 @@ impl L for Lib {
         }
         let segement = AddressSpace::itext();
         let frame_number = Address::number(ttext as usize);
-        info!("itext: {:x}", segement.range.0);
         PageLib::fixed_map(&mut page_table, segement.range.0 , frame_number, segement.flag);
 
-        Process::new(None, address_space, page_table);
+        Process::new(None, address_space, page_table)
     }
 
-    fn init() -> usize {
-        let file = file_system::Handler::open_file("init", Flag::R_W);
-        if let Some(mut file) = file {
-            let elf = file.read_all();
-            extern "C" {
-                fn ttext();
-            }
-            let (address_space, data_offset) = AddressSpace::from_elf(&elf);
+    fn from_elf(parent: Option<usize>, elf: &[u8]) -> usize {
+        let (address_space, data_offset) = AddressSpace::from_elf(&elf);
+        let pid = Self::new(parent, address_space);
 
-            let mut page_table = PageTable::new();
+        access(|manager| {
+            let process = manager.process[pid].as_mut().unwrap();
             for i in 0..data_offset.len() { 
-                let segement= address_space.segement[i];
-                PageLib::map_area(&mut page_table, segement.range, segement.flag);
+                let segement= process.address_space.segement[i];
 
-                PageLib::copy_data(&mut page_table, segement.range, &elf[data_offset[i].0..data_offset[i].1]);
-            } 
-            let segement = AddressSpace::itext();
-            let frame_number = Address::number(ttext as usize);
-            PageLib::fixed_map(&mut page_table, segement.range.0 , frame_number, segement.flag);
-
-            Process::new(None, address_space, page_table)
-        } else { panic!("Error when opening the init_process."); }
+                PageLib::copy_data(&mut process.page_table, segement.range, &elf[data_offset[i].0..data_offset[i].1]);
+            }
+        });
+ 
+        pid
     }
 }
 
 use ones::info_module;
+
+#[allow(unused)]
 fn info<M>(msg: impl IntoIterator<Item = M>)
     where M: AsRef<str>,
 {

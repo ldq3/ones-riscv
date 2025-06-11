@@ -44,7 +44,7 @@ impl L for Lib {
             let isp = Address::address(segement[2].range.0 + 1) - 1;
 
             let addr_trans = { 
-                use crate::satp;
+                use crate::cpu::satp;
 
                 let process = manager.process[0].as_mut().unwrap();
                 let frame_number = process.page_table.root.number;
