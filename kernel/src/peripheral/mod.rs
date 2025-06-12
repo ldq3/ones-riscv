@@ -2,12 +2,13 @@ pub mod console;
 pub mod disk;
 // pub mod queue;
 
-use ones::peripheral::Lib;
+use ones::peripheral::{ plic, Lib as L };
+use crate::runtime::config::PLIC_BASE;
 
 #[allow(unused)]
-pub struct Handler;
+pub struct Lib;
 
-impl Lib for Handler {
+impl L for Lib {
     fn handle() {
         todo!()
         // let source = plic::Handler::claim(0, config::HART_S);
@@ -19,6 +20,18 @@ impl Lib for Handler {
         //     _ => panic!("unsupported IRQ {}", source),
         // }
         // plic.complete(0, config::HART_S, source);
+    }
+
+    fn init() {
+        unsafe { plic::Handler::init(PLIC_BASE); }
+
+        plic::Handler::threshold(config::HART_M, 1);
+        plic::Handler::threshold(config::HART_S, 0);
+
+        for (interrupt, priority) in config::INTERRUPT {
+            plic::Handler::enable(config::HART_S, interrupt);
+            plic::Handler::priority(interrupt, priority);
+        }
     }
 }
 

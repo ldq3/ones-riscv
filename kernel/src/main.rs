@@ -46,56 +46,32 @@ mod peripheral;
 mod file_system;
 mod system_call;
 
-use ones::intervene::Lib as _;
+use ones::{
+    concurrency::{ coroutine::{ context::Context, Coroutine, Lib as _ }, process::Lib as _, thread::{ self, Lib as _ } },
+    file_system::{ Flag, Lib as _ },
+    intervene::Lib as _,
+    peripheral::Lib as _,
+    runtime::Lib as _
+};
+use crate::{
+    peripheral::disk,
+    concurrency::{ 
+        process::Lib as PLib,
+        thread::Lib as TLib,
+        coroutine::Lib as CLib,
+    },
+};
 
 #[no_mangle]
 pub fn kernel_main() -> ! {
-    use ones::runtime::Lib as _;
     runtime::Lib::init();
-
-    { // Initialize the intervene system.
-        use ones::intervene::Lib as _;
-        intervene::Lib::init();
-
-        use ones::peripheral::plic;
-        use crate::peripheral::config::{ HART_M, HART_S, INTERRUPT };
-
-        use crate::runtime::config::PLIC_BASE;
-        unsafe { plic::Handler::init(PLIC_BASE); }
-
-        plic::Handler::threshold(HART_M, 1);
-        plic::Handler::threshold(HART_S, 0);
-    
-        for (interrupt, priority) in INTERRUPT {
-            plic::Handler::enable(HART_S, interrupt);
-            plic::Handler::priority(interrupt, priority);
-        }
-    }
-
-    use ones::file_system::Main as _;
-    { // Initialize the file system.
-        use crate::{ peripheral::disk, file_system };
-
-        file_system::Handler::init(disk::HANDLER.clone());
-    }
+    intervene::Lib::init();
+    peripheral::Lib::init();
+    file_system::Lib::init(disk::HANDLER.clone());
     
     { // User program.
-        use crate::concurrency::{ 
-            process::Lib as PLib,
-            thread::Lib as TLib,
-            coroutine::Lib as CLib,
-        };
-        use ones::{
-            file_system::Flag,
-            concurrency::{ 
-                process::Lib as _,
-                thread::{ self, Lib as _ },
-
-                coroutine::{ Lib as _, Coroutine, context::Context },
-            }
-        };
-        let res = file_system::Handler::open_file("init", Flag::R_W);
-        let pid = if let Some(mut file) = res {
+        let res = file_system::Lib::open_file("init", Flag::R_W);
+        let pid = if let Ok(mut file) = res {
             let elf = file.read_all();
             PLib::from_elf(None, &elf)
         } else { panic!() };
