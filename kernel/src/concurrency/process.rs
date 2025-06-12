@@ -10,7 +10,7 @@ pub struct Lib;
 impl L for Lib {
     fn new(parent: Option<usize>, address_space: AddressSpace) -> usize {
         extern "C" {
-            fn ttext();
+            fn itext();
         }
 
         let mut page_table = PageTable::new();
@@ -19,7 +19,7 @@ impl L for Lib {
         }
 
         let segement = AddressSpace::itext();
-        let frame_number = Address::number(ttext as usize);
+        let frame_number = Address::number(itext as usize);
         PageLib::fixed_map(&mut page_table, segement.range.0 , frame_number, segement.flag);
 
         Process::new(parent, address_space, page_table)
@@ -27,7 +27,7 @@ impl L for Lib {
 
     fn new_kernel(address_space: AddressSpace) -> usize {
         extern "C" {
-            fn ttext();
+            fn itext();
         }
 
         let mut page_table = PageTable::new();
@@ -35,7 +35,7 @@ impl L for Lib {
             PageLib::fixed_map_area(&mut page_table, segement.range, segement.range.0, segement.flag);
         }
         let segement = AddressSpace::itext();
-        let frame_number = Address::number(ttext as usize);
+        let frame_number = Address::number(itext as usize);
         PageLib::fixed_map(&mut page_table, segement.range.0 , frame_number, segement.flag);
 
         Process::new(None, address_space, page_table)

@@ -39,6 +39,7 @@ impl L for Lib {
 
             fn ekernel();
         }
+        
         unsafe{ clear(sbss as usize, ebss as usize) };
 
         use heap::Main as _;

@@ -6,7 +6,7 @@
     ld x\n, \n*8(sp)
 .endm
 
-    .section .text.ttext
+    .section .text.itext
     .globl handler_user
     .globl load_user_context
     .globl handler_kernel
