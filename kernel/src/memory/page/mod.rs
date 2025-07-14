@@ -26,14 +26,14 @@ pub mod entry;
 
 use alloc::vec::Vec;
 use ones::memory::{
-    page::{ entry::{ Lib as _, Entry }, Dependence, Lib as L },
+    page::{ entry::{ Lib as _, Entry }, Hal, Lib as L },
     Flag,
 };
 use entry::EntryLib;
 
 pub struct Lib;
 
-impl Dependence for Lib {
+impl Hal for Lib {
     fn index(page_num: usize) -> Vec<usize> {
         let mut page_num = page_num;
         let mut index = [0usize; 3];

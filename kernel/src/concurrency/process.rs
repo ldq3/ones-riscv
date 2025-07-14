@@ -1,5 +1,5 @@
 use ones::{
-    concurrency::process::{ Dependence, Lib as L, Process },
+    concurrency::process::{ Hal, Lib as L, Process },
     memory::{ page::{ Lib as _, Table as PageTable }, Address },
     runtime::address_space::AddressSpace
 };
@@ -7,7 +7,7 @@ use crate::{ memory::page::Lib as PageLib };
 
 pub struct Lib;
 
-impl Dependence for Lib {
+impl Hal for Lib {
     #[inline]
     fn copy_data(table: &mut PageTable, range: (usize, usize), data: &[u8]) {
         PageLib::copy_data(table, range, data);

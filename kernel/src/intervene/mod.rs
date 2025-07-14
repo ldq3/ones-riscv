@@ -37,18 +37,19 @@ scratch 寄存器的作用
 use alloc::{ format, vec };
 use riscv::{ addr::BitField, register::{ self, sscratch, stval } };
 use ones::{
-    concurrency::{process, thread},
-    intervene::{ data::Data, Cause, Dependence, Lib as L },
+    concurrency::{process, thread::{self, context::{Context, Lib as _} }},
+    intervene::{ data::Data, Cause, Hal, Lib as L },
     memory::Address,
     runtime::address_space::AddressSpace
 };
+use crate::concurrency::thread::context::Lib as CLib;
 
 use core::arch::global_asm;
 global_asm!(include_str!("handler.S"));
 
 pub struct Lib;
 
-impl Dependence for Lib {
+impl Hal for Lib {
     fn cause() -> Cause {
         use register::scause;
         use Cause::*;
@@ -86,18 +87,14 @@ impl Dependence for Lib {
     }
 
     #[inline]
-    fn syscall(id: usize, args: [usize; 3]) -> isize {
+    fn syscall(context: &Context) -> isize {
         use crate::system_call;
         use ones::system_call::Lib;
-        system_call::Handler::syscall(id, args)
+        system_call::Lib::syscall(CLib::iid(context), CLib::iarg(context))
     }
 
     fn breakpoiont(idata: &mut Data) {
         idata.cx.pc +=2;
-    }
-    
-    fn envcall() {
-        todo!()
     }
 
     #[inline]
