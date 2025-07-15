@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ones = { path = "../../../lib" }
+ones = { git = "https://github.com/ldq3/ones.git", tag = "v0.0.2" }
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
 riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"] }
 log = "0.4"
