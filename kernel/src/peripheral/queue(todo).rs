@@ -3,13 +3,13 @@ virtio queue
 */
 
 use ones::{ 
-    peripheral::virtio::queue::{ Dependence, Queue as Q, ModelQueue, Descriptor, Flag },
+    peripheral::virtio::queue::{ Hal, Queue as Q, ModelQueue, Descriptor, Flag },
     memory::page::frame::Frame
 };
 
 pub struct Queue(ModelQueue<16>);
 
-impl Dependence for Queue {
+impl Hal for Queue {
     #[inline]
     fn size(&self) -> u16 {
         self.0.size

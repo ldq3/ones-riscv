@@ -1,10 +1,10 @@
 use alloc::sync::Arc;
-use ones::file_system::{ Main, Inode };
+use ones::file_system::{ Lib as L, Inode };
 
-pub struct Handler;
+pub struct Lib;
 
-impl Main for Handler {
-    fn create(_name: &str) -> Option<Arc<Inode>> {
+impl L for Lib {
+    fn create(_name: &str) -> Result<Arc<Inode>, ()> {
         todo!()
     }
 }

@@ -1,5 +1,5 @@
 OUTPUT_ARCH(riscv)
-ENTRY(_start)
+ENTRY(start)
 BASE_ADDRESS = 0x80200000;
 
 SECTIONS
@@ -11,8 +11,8 @@ SECTIONS
         stext = .;
         *(.text.entry)
         . = ALIGN(4K);
-        ttext = .;
-        *(.text.ttext)
+        itext = .;
+        *(.text.itext)
         . = ALIGN(4K);
         *(.text .text.*)
         etext = .;

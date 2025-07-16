@@ -7,6 +7,13 @@ const NUMBER_WIDTH: usize = 27;
 
 const OFFSET_WIDTH: usize = 12;
 
+## 物理地址
+const ADDRESS_WIDTH: usize = 56;
+
+const NUMBER_WIDTH: usize = 44;
+
+const OFFSET_WIDTH: usize = 12; 
+
 ## 页表项
 const FRAME_NUMER_WIDTH; // 参见 frame
 
@@ -15,19 +22,18 @@ const RSW_WIDTH: usize = 2;
 const FLAG_WIDTH: usize = 8;
 */
 
-pub mod frame;
 pub mod entry;
 
-use core::slice::from_raw_parts_mut;
-
 use alloc::vec::Vec;
-pub use ones::memory::page::Map;
-use ones::memory::{ page::{ entry::Entry as _, frame::Frame, Dependence, ModelTable, Table as T }, Flag };
-use entry::TableEntry;
+use ones::memory::{
+    page::{ entry::{ Lib as _, Entry }, Hal, Lib as L },
+    Flag,
+};
+use entry::EntryLib;
 
-pub struct Table(ModelTable);
+pub struct Lib;
 
-impl Dependence for Table {
+impl Hal for Lib {
     fn index(page_num: usize) -> Vec<usize> {
         let mut page_num = page_num;
         let mut index = [0usize; 3];
@@ -47,74 +53,24 @@ impl Dependence for Table {
     }
 
     #[inline]
-    fn new_entry(frame_number: usize, flag: Flag) -> usize {
-        TableEntry::new(frame_number, flag).bits()
+    fn flag(entry: &Entry) -> Flag {
+        EntryLib::flag(entry)
     }
 
     #[inline]
-    fn flag(entry: usize) -> Flag {
-        let entry = TableEntry::from_bits(entry);
-        entry.flag()
+    fn new_entry(frame_num: usize, page_flag: Flag) -> Entry {
+        EntryLib::new(frame_num, page_flag)
     }
 
     #[inline]
-    fn frame_number(entry: usize) -> usize {
-        let entry = TableEntry::from_bits(entry);
-        entry.frame_number()
+    fn frame_number(entry: &Entry) -> usize {
+        EntryLib::frame_number(entry)
     }
 
     #[inline]
-    fn set_flag(entry: &mut usize, flag: Flag) {
-        let mut wrapper = TableEntry::from_bits(*entry);
-        wrapper.set_flag(flag);
-        *entry = wrapper.bits();
-    }
-
-    #[inline]
-    fn root_table(&mut self) -> &'static mut [usize] {
-        use ones::memory::Address;
-
-        let address = Address::address(self.0.root.number);
-        unsafe { from_raw_parts_mut(address as *mut usize, 512) }
-    }
-
-    #[inline]
-    fn frame(&mut self, frame: ones::memory::page::frame::Frame) {
-        self.0.frame.push(frame);
+    fn set_flag(entry: &mut Entry, page_flag: Flag) {
+        EntryLib::flag_set(entry, page_flag);
     }
 }
 
-impl T for Table {
-    fn new() -> Self {
-        let root = Frame::new();
-
-        let inner = ModelTable {
-            root,
-            frame: Vec::new()
-        };
-
-        Self(inner)
-    }
-
-    fn copy_data(&mut self, range: (usize, usize), data: &[u8]) {
-        use ones::memory::Address;
-        let page_size = Address::address(1);
-
-        let mut start: usize = 0;
-        let mut current = range.0;
-        let len = data.len();
-        loop {
-            let src = &data[start..len.min(start + page_size)];
-            let (frame_number, _) = self.get(current);
-            let address = Address::address(frame_number);
-            let target = unsafe{ from_raw_parts_mut(address as *mut u8, src.len()) };
-            target.copy_from_slice(src);
-
-            start += page_size;
-            if start >= len {
-                break;
-            }
-            current += 1;
-        }
-    }
-}
+impl L for Lib { }

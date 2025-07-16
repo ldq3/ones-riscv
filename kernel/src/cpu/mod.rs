@@ -1,5 +1,5 @@
 /*！
-ttext 节的位置不能动
+itext 节的位置不能动
 
 # SV 39
 RV 64
@@ -18,11 +18,11 @@ satp 寄存器的组成：
 */
 pub mod timer;
 
-use ones::cpu::Lib;
+use ones::cpu::Lib as L;
 
-pub struct Handler;
+pub struct Lib;
 
-impl Lib for Handler {
+impl L for Lib {
     fn shutdown(failure: bool) -> ! {
         #[allow(deprecated)]
         use sbi_rt::{ system_reset, NoReason, Shutdown, SystemFailure };
